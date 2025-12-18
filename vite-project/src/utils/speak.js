@@ -18,6 +18,12 @@ export async function speak(text, options = {}) {
       ...options
     })
     
+    // Handle Puter.js error responses
+    if (result && typeof result === 'object' && result.success === false) {
+      const errorMsg = result.error?.message || result.error || 'TTS generation failed'
+      throw new Error(errorMsg)
+    }
+    
     // Puter.js may return an audio element directly or an audio blob
     let audio;
     if (result instanceof HTMLAudioElement) {

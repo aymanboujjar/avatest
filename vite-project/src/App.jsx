@@ -13,6 +13,7 @@ function AppContent() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [audioUrl, setAudioUrl] = useState(null)
+  const [answerText, setAnswerText] = useState(null) // Always show the answer
   const { setLipSyncData, setAudioElement, setIsProcessing } = useLipSyncContext()
 
   async function handleSpeak(e) {
@@ -26,87 +27,110 @@ function AppContent() {
     setLoading(true)
     setError(null)
     setAudioUrl(null)
+    setAnswerText(null)
+
+    let responseText = null
 
     try {
-      // Get interactive response
-      let responseText = text.trim()
+      // STEP 1: ALWAYS GET THE ANSWER FIRST (this should never fail)
+      const userQuery = text.trim()
       
       // Check for predefined responses first
-      const predefined = getPredefinedResponse(responseText)
+      const predefined = getPredefinedResponse(userQuery)
       if (predefined) {
         responseText = predefined
       } else {
         // Get interactive response (searches web if needed)
         try {
-          responseText = await getInteractiveResponse(responseText)
+          responseText = await getInteractiveResponse(userQuery)
         } catch (interactiveError) {
           console.warn('Interactive response failed, using original text:', interactiveError)
-          // Use original text if interactive fails
+          responseText = userQuery // Always have something
         }
       }
       
-      console.log('Speaking:', responseText)
-      
-      // Puter.js returns an audio element directly
-      const audio = await speak(responseText)
-      
-      // Remove previous audio element if exists
-      const prevAudio = document.querySelector('.generated-audio')
-      if (prevAudio) {
-        prevAudio.remove()
+      // Ensure we have text
+      if (!responseText || !responseText.trim()) {
+        responseText = userQuery || "I'm sorry, I couldn't process that request."
       }
-
-      // Add controls and styling to the audio element
-      audio.className = 'generated-audio'
-      audio.controls = true
-      audio.style.width = '100%'
-      audio.style.marginTop = '12px'
       
-      // Create or find audio container
-      let audioContainer = document.querySelector('.audio-container')
-      if (!audioContainer) {
-        audioContainer = document.createElement('div')
-        audioContainer.className = 'audio-container'
-        const form = e.target
-        form.appendChild(audioContainer)
-      }
-      audioContainer.innerHTML = ''
-      audioContainer.appendChild(audio)
-
-      // Store audio element for lip sync
-      setAudioElement(audio)
-
-      // Process lip sync (non-blocking - always succeeds)
-      setIsProcessing(true)
+      // STEP 2: DISPLAY ANSWER IMMEDIATELY (user always gets their answer)
+      setAnswerText(responseText)
+      console.log('Answer ready:', responseText.substring(0, 100))
+      
+      // STEP 3: TRY TO GENERATE SPEECH (optional - doesn't block answer display)
+      let audio = null
       try {
-        console.log('Processing lip sync...')
-        const lipSyncResult = await processLipSync(audio)
-        setLipSyncData(lipSyncResult)
-        console.log('Lip sync data loaded:', lipSyncResult)
-      } catch (lipSyncError) {
-        console.warn('Lip sync processing failed, using fallback animation:', lipSyncError)
-        // Set empty data so fallback animation is used
-        setLipSyncData({
-          metadata: { duration: 0 },
-          mouthCues: []
-        })
-      } finally {
-        setIsProcessing(false)
-      }
+        console.log('Attempting TTS generation...')
+        audio = await speak(responseText)
+      
+        // Remove previous audio element if exists
+        const prevAudio = document.querySelector('.generated-audio')
+        if (prevAudio) {
+          prevAudio.remove()
+        }
 
-      // Try to play the audio
-      try {
-        await audio.play()
-        console.log('Audio playing')
-        setAudioUrl('playing') // Set a flag to show success
-      } catch (err) {
-        console.error('Audio play blocked:', err)
-        setError('Audio generated but autoplay was blocked. Use the audio controls to play.')
-        setAudioUrl('ready') // Audio is ready but not playing
+        // Add controls and styling to the audio element
+        audio.className = 'generated-audio'
+        audio.controls = true
+        audio.style.width = '100%'
+        audio.style.marginTop = '12px'
+        
+        // Create or find audio container
+        let audioContainer = document.querySelector('.audio-container')
+        if (!audioContainer) {
+          audioContainer = document.createElement('div')
+          audioContainer.className = 'audio-container'
+          const form = e.target
+          form.appendChild(audioContainer)
+        }
+        audioContainer.innerHTML = ''
+        audioContainer.appendChild(audio)
+
+        // Store audio element for lip sync
+        setAudioElement(audio)
+
+        // Process lip sync (non-blocking - always succeeds)
+        setIsProcessing(true)
+        try {
+          console.log('Processing lip sync...')
+          const lipSyncResult = await processLipSync(audio)
+          setLipSyncData(lipSyncResult)
+          console.log('Lip sync data loaded:', lipSyncResult)
+        } catch (lipSyncError) {
+          console.warn('Lip sync processing failed, using fallback animation:', lipSyncError)
+          // Set empty data so fallback animation is used
+          setLipSyncData({
+            metadata: { duration: 0 },
+            mouthCues: []
+          })
+        } finally {
+          setIsProcessing(false)
+        }
+
+        // Try to play the audio
+        try {
+          await audio.play()
+          console.log('Audio playing')
+          setAudioUrl('playing')
+        } catch (err) {
+          console.error('Audio play blocked:', err)
+          setError('Audio generated but autoplay was blocked. Use the audio controls to play.')
+          setAudioUrl('ready')
+        }
+      } catch (ttsError) {
+        // TTS failed but answer is already displayed!
+        console.warn('TTS generation failed, but answer is ready:', ttsError)
+        setError('Speech generation failed, but your answer is shown below.')
+        setAudioUrl('failed')
       }
     } catch (err) {
-      console.error('TTS Error:', err)
-      setError(err.message || 'Failed to generate speech. Please try again.')
+      console.error('Unexpected error:', err)
+      // Even if everything fails, show something
+      if (!answerText) {
+        setAnswerText(text.trim() || "I encountered an error processing your request.")
+      }
+      setError('There was an issue, but I tried to provide an answer below.')
     } finally {
       setLoading(false)
     }
@@ -157,11 +181,62 @@ function AppContent() {
               )}
             </button>
 
+            {/* ALWAYS SHOW THE ANSWER - most important */}
+            {answerText && (
+              <div className="answer-display" style={{
+                marginTop: '20px',
+                padding: '15px',
+                backgroundColor: '#f0f9ff',
+                border: '2px solid #3b82f6',
+                borderRadius: '8px',
+                fontSize: '16px',
+                lineHeight: '1.6',
+                color: '#1e40af',
+                fontWeight: '500'
+              }}>
+                <div style={{ marginBottom: '8px', fontWeight: 'bold', color: '#1e3a8a' }}>
+                  Answer:
+                </div>
+                <div>{answerText}</div>
+                {/* Browser TTS button if Puter.js TTS failed */}
+                {audioUrl === 'failed' && 'speechSynthesis' in window && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.speechSynthesis.cancel()
+                      const utterance = new SpeechSynthesisUtterance(answerText)
+                      utterance.rate = 0.9
+                      utterance.pitch = 1
+                      window.speechSynthesis.speak(utterance)
+                    }}
+                    style={{
+                      marginTop: '12px',
+                      padding: '8px 16px',
+                      backgroundColor: '#3b82f6',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '14px'
+                    }}
+                  >
+                    🔊 Play with Browser TTS
+                  </button>
+                )}
+              </div>
+            )}
+            
             {error && <div className="error-message">{error}</div>}
             
-            {audioUrl && !error && (
+            {audioUrl === 'playing' && (
               <div className="success-message">
-                ✓ Audio generated successfully!
+                ✓ Audio generated and playing!
+              </div>
+            )}
+            
+            {audioUrl === 'ready' && (
+              <div className="success-message">
+                ✓ Audio generated! Use the controls above to play.
               </div>
             )}
           </form>
