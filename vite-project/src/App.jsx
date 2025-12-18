@@ -56,7 +56,7 @@ function AppContent() {
       // Store audio element for lip sync
       setAudioElement(audio)
 
-      // Process lip sync
+      // Process lip sync (non-blocking - always succeeds)
       setIsProcessing(true)
       try {
         console.log('Processing lip sync...')
@@ -64,9 +64,12 @@ function AppContent() {
         setLipSyncData(lipSyncResult)
         console.log('Lip sync data loaded:', lipSyncResult)
       } catch (lipSyncError) {
-        console.warn('Lip sync processing failed:', lipSyncError)
-        // Don't fail the whole operation if lip sync fails
-        setError('Audio generated but lip sync processing failed. Avatar will use default animation.')
+        console.warn('Lip sync processing failed, using fallback animation:', lipSyncError)
+        // Set empty data so fallback animation is used
+        setLipSyncData({
+          metadata: { duration: 0 },
+          mouthCues: []
+        })
       } finally {
         setIsProcessing(false)
       }

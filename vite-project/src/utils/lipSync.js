@@ -34,13 +34,17 @@ async function sendAudioBlob(blob) {
     body: formData,
   })
   
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}))
-    throw new Error(errorData.error || 'Failed to process lip sync')
-  }
-  
-  const result = await res.json()
-  return result.data || result
+        if (!res.ok) {
+          // If error, return empty data for fallback animation
+          console.warn('Lip sync API error, using fallback animation')
+          return {
+            metadata: { duration: 0 },
+            mouthCues: []
+          }
+        }
+        
+        const result = await res.json()
+        return result.data || result
 }
 
 export async function processLipSync(audio) {
@@ -88,17 +92,21 @@ export async function processLipSync(audio) {
     })
 
     if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}))
-      throw new Error(errorData.error || 'Failed to process lip sync')
+      // If error, return empty data for fallback animation
+      console.warn('Lip sync API error, using fallback animation')
+      return {
+        metadata: { duration: 0 },
+        mouthCues: []
+      }
     }
 
     const data = await res.json()
     
-    if (!data.success || !data.data) {
-      throw new Error('Invalid response from lip sync service')
+    // Always return data, even if empty (fallback animation will be used)
+    return data.data || {
+      metadata: { duration: 0 },
+      mouthCues: []
     }
-
-    return data.data
   } catch (error) {
     console.error('Lip sync processing error:', error)
     throw error

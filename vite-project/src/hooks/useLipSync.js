@@ -95,64 +95,46 @@ export function useLipSync(headRef) {
       return
     }
 
-    // If audio is playing but no Rhubarb data, use fallback animation
-    if (!hasLipSyncData) {
-      // Create animated lip movement based on audio time
-      const audioTime = currentTimeRef.current || 0
-      // Use audio time to create natural-looking lip movement
-      const frequency = 5.0 // Speed of lip movement
-      const v1 = Math.abs(Math.sin(audioTime * frequency))
-      const v2 = Math.abs(Math.sin(audioTime * frequency + Math.PI / 3))
-      const v3 = Math.abs(Math.sin(audioTime * frequency + Math.PI * 2 / 3))
-      
-      // Map to different visemes for natural movement
-      if (dict.viseme_aa !== undefined) infl[dict.viseme_aa] = v1 * 0.8
-      if (dict.viseme_oh !== undefined) infl[dict.viseme_oh] = v2 * 0.6
-      if (dict.viseme_ee !== undefined) infl[dict.viseme_ee] = v3 * 0.4
-      if (dict.viseme_ou !== undefined) infl[dict.viseme_ou] = (1 - v1) * 0.5
-      
-      return
-    }
+    // Always use simple animation when audio is playing (don't wait for Rhubarb)
+    // Simple, smooth lip movement synchronized with audio
+    const audioTime = currentTimeRef.current || 0
+    const frequency = 4.5 // Speed of lip movement - adjust for natural feel
+    const v1 = Math.abs(Math.sin(audioTime * frequency))
+    const v2 = Math.abs(Math.sin(audioTime * frequency + Math.PI / 2))
+    
+    // Use Rhubarb data if available, otherwise use simple animation
+    if (hasLipSyncData) {
+      // Try to use Rhubarb data, but fall back to animation if no cue matches
+      const currentTime = currentTimeRef.current
+      let currentCue = null
 
-    // Find current mouth cue based on audio time
-    const currentTime = currentTimeRef.current
-    let currentCue = null
-
-    for (const cue of mouthCuesRef.current) {
-      if (currentTime >= cue.start && currentTime <= cue.end) {
-        currentCue = cue
-        break
-      }
-    }
-
-    // If no cue found, use silence (X)
-    const mouthShape = currentCue ? currentCue.value : 'X'
-    const visemeName = RHUBARB_TO_VISEME[mouthShape] || 'viseme_sil'
-
-    // Apply viseme
-    if (dict[visemeName] !== undefined) {
-      infl[dict[visemeName]] = 1.0
-    } else {
-      // Fallback: try common viseme names
-      const fallbackMap = {
-        'A': ['viseme_aa', 'viseme_A'],
-        'B': ['viseme_oh', 'viseme_B'],
-        'C': ['viseme_ou', 'viseme_C'],
-        'D': ['viseme_ee', 'viseme_D'],
-        'E': ['viseme_ih', 'viseme_E'],
-        'F': ['viseme_ff', 'viseme_F'],
-        'G': ['viseme_th', 'viseme_G'],
-        'H': ['viseme_kk', 'viseme_H'],
-        'X': ['viseme_sil', 'viseme_X'],
-      }
-
-      const fallbacks = fallbackMap[mouthShape] || []
-      for (const fallback of fallbacks) {
-        if (dict[fallback] !== undefined) {
-          infl[dict[fallback]] = 1.0
+      for (const cue of mouthCuesRef.current) {
+        if (currentTime >= cue.start && currentTime <= cue.end) {
+          currentCue = cue
           break
         }
       }
+
+      if (currentCue) {
+        // Use Rhubarb mouth shape
+        const mouthShape = currentCue.value
+        const visemeName = RHUBARB_TO_VISEME[mouthShape] || 'viseme_sil'
+
+        if (dict[visemeName] !== undefined) {
+          infl[dict[visemeName]] = 1.0
+          return
+        }
+      }
+      // If Rhubarb cue not found, fall through to animation
     }
+    
+    // Simple animated lip movement (always works)
+    if (dict.viseme_aa !== undefined) infl[dict.viseme_aa] = v1 * 0.7
+    if (dict.viseme_oh !== undefined) infl[dict.viseme_oh] = v2 * 0.5
+    if (dict.viseme_ee !== undefined) infl[dict.viseme_ee] = (1 - v1) * 0.4
+    if (dict.viseme_ou !== undefined) infl[dict.viseme_ou] = (1 - v2) * 0.3
+    
+    return
+
   })
 }

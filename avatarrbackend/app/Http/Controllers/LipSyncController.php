@@ -209,7 +209,7 @@ class LipSyncController extends Controller
 
         // Check if processing succeeded BEFORE cleaning up
         if ($returnCode !== 0 || !file_exists($outputPath)) {
-            Log::error('Rhubarb Lip Sync failed', [
+            Log::warning('Rhubarb Lip Sync failed, returning empty data for fallback animation', [
                 'command' => $command,
                 'output' => implode("\n", $output),
                 'return_code' => $returnCode,
@@ -217,14 +217,22 @@ class LipSyncController extends Controller
                 'output_exists' => file_exists($outputPath)
             ]);
 
-            // Clean up temp audio file only on failure
+            // Clean up temp audio file
             @unlink($audioPath);
 
+            // Return success with empty data - frontend will use fallback animation
             return $this->addCorsHeaders(response()->json([
-                'error' => 'Failed to process audio with Rhubarb Lip Sync',
-                'details' => implode("\n", $output),
-                'return_code' => $returnCode
-            ], 500));
+                'success' => true,
+                'data' => [
+                    'metadata' => [
+                        'soundFile' => basename($audioPath),
+                        'duration' => 0
+                    ],
+                    'mouthCues' => []
+                ],
+                'fallback' => true,
+                'message' => 'Rhubarb processing failed, using fallback animation'
+            ]));
         }
 
         // Read and return JSON output
