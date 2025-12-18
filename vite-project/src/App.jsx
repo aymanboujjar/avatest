@@ -4,6 +4,7 @@ import { OrbitControls, Environment } from '@react-three/drei'
 import Avatar from './components/Avatar'
 import { speak } from './utils/speak'
 import { processLipSync } from './utils/lipSync'
+import { getInteractiveResponse, getPredefinedResponse } from './utils/interactive'
 import { LipSyncProvider, useLipSyncContext } from './contexts/LipSyncContext'
 import './App.css'
 
@@ -27,8 +28,27 @@ function AppContent() {
     setAudioUrl(null)
 
     try {
+      // Get interactive response
+      let responseText = text.trim()
+      
+      // Check for predefined responses first
+      const predefined = getPredefinedResponse(responseText)
+      if (predefined) {
+        responseText = predefined
+      } else {
+        // Get interactive response (searches web if needed)
+        try {
+          responseText = await getInteractiveResponse(responseText)
+        } catch (interactiveError) {
+          console.warn('Interactive response failed, using original text:', interactiveError)
+          // Use original text if interactive fails
+        }
+      }
+      
+      console.log('Speaking:', responseText)
+      
       // Puter.js returns an audio element directly
-      const audio = await speak(text.trim())
+      const audio = await speak(responseText)
       
       // Remove previous audio element if exists
       const prevAudio = document.querySelector('.generated-audio')
