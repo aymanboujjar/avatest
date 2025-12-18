@@ -1,50 +1,44 @@
-// Use direct URL - set VITE_API_URL in .env to override
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://192.168.100.100:8000'
+import puter from "@heyputer/puter.js";
 
-export async function speak(text) {
-  const url = `${API_BASE_URL}/api/tts`
-  
-  console.log('Calling TTS API:', url)
-  
+/**
+ * Generate speech from text using Puter.js
+ * @param {string} text - The text to convert to speech
+ * @param {object} options - Optional configuration
+ * @returns {Promise<HTMLAudioElement>} - Audio element that can be played
+ */
+export async function speak(text, options = {}) {
   try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text })
-    })
-
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}))
-      let errorMessage = errorData.error || errorData.message || `Failed to generate speech: ${res.status} ${res.statusText}`
-      
-      // Handle specific error codes
-      if (res.status === 429) {
-        if (errorMessage.includes('quota') || errorMessage.includes('exceeded')) {
-          errorMessage = 'API quota exceeded. Please check your OpenAI account billing and usage limits.'
-        } else {
-          errorMessage = 'Too many requests. Please try again later.'
-        }
-      } else if (res.status === 401) {
-        errorMessage = 'Authentication failed. Please check your API key configuration.'
-      } else if (res.status === 500 && errorMessage.includes('API key')) {
-        errorMessage = 'OpenAI API key not configured or invalid.'
-      }
-      
-      console.error('TTS API Error:', errorMessage, errorData)
-      throw new Error(errorMessage)
-    }
-
-    const data = await res.json()
+    console.log('Generating speech with Puter.js:', text.substring(0, 50) + '...')
     
-    if (!data.url) {
-      throw new Error('No audio URL returned from server')
+    // Use Puter.js to generate speech with ElevenLabs provider
+    const result = await puter.ai.txt2speech(text, {
+      provider: options.provider || "elevenlabs",
+      voice: options.voice || "21m00Tcm4TlvDq8ikWAM", // Rachel voice
+      model: options.model || "eleven_multilingual_v2",
+      ...options
+    })
+    
+    // Puter.js may return an audio element directly or an audio blob
+    let audio;
+    if (result instanceof HTMLAudioElement) {
+      // Already an audio element
+      audio = result;
+    } else if (result instanceof Blob) {
+      // Convert blob to audio element
+      const audioUrl = URL.createObjectURL(result);
+      audio = new Audio(audioUrl);
+      // Clean up URL when audio ends
+      audio.addEventListener('ended', () => {
+        URL.revokeObjectURL(audioUrl);
+      });
+    } else {
+      throw new Error('Unexpected response type from Puter.js');
     }
-
-    return data.url
+    
+    console.log('Speech generated successfully')
+    return audio
   } catch (error) {
-    if (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_REFUSED')) {
-      throw new Error('Cannot connect to backend server. Make sure Laravel backend is running on http://192.168.100.100:8000')
-    }
-    throw error
+    console.error('Puter.js TTS Error:', error)
+    throw new Error(error.message || 'Failed to generate speech. Please try again.')
   }
 }

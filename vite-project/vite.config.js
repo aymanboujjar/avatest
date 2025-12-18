@@ -10,6 +10,11 @@ export default defineConfig({
       },
     }),
   ],
+  resolve: {
+    alias: {
+      '@heyputer/puter.js': '@heyputer/puter.js/src/index.js',
+    },
+  },
   server: {
     proxy: {
       '/api': {
