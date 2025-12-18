@@ -3,13 +3,16 @@ import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Environment } from '@react-three/drei'
 import Avatar from './components/Avatar'
 import { speak } from './utils/speak'
+import { processLipSync } from './utils/lipSync'
+import { LipSyncProvider, useLipSyncContext } from './contexts/LipSyncContext'
 import './App.css'
 
-export default function App() {
+function AppContent() {
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [audioUrl, setAudioUrl] = useState(null)
+  const { setLipSyncData, setAudioElement, setIsProcessing } = useLipSyncContext()
 
   async function handleSpeak(e) {
     e.preventDefault()
@@ -49,6 +52,24 @@ export default function App() {
       }
       audioContainer.innerHTML = ''
       audioContainer.appendChild(audio)
+
+      // Store audio element for lip sync
+      setAudioElement(audio)
+
+      // Process lip sync
+      setIsProcessing(true)
+      try {
+        console.log('Processing lip sync...')
+        const lipSyncResult = await processLipSync(audio)
+        setLipSyncData(lipSyncResult)
+        console.log('Lip sync data loaded:', lipSyncResult)
+      } catch (lipSyncError) {
+        console.warn('Lip sync processing failed:', lipSyncError)
+        // Don't fail the whole operation if lip sync fails
+        setError('Audio generated but lip sync processing failed. Avatar will use default animation.')
+      } finally {
+        setIsProcessing(false)
+      }
 
       // Try to play the audio
       try {
@@ -106,7 +127,7 @@ export default function App() {
               {loading ? (
                 <>
                   <span className="loading-spinner"></span>
-                  Generating...
+                  Generating Speech & Lip Sync...
                 </>
               ) : (
                 'Generate Speech'
@@ -124,5 +145,13 @@ export default function App() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function App() {
+  return (
+    <LipSyncProvider>
+      <AppContent />
+    </LipSyncProvider>
   )
 }
